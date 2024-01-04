@@ -1,4 +1,4 @@
-module github.com/linxGnu/grocksdb
+module github.com/nananatsu/grocksdb
 
 go 1.17
 

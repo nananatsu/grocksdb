@@ -1,7 +1,8 @@
 package grocksdb
 
+// #cgo CFLAGS: -I/home/flos/project/rocksdb/include
 // #include <stdlib.h>
-// #include "rocksdb/c.h"
+// #include "backup.h"
 import "C"
 import (
 	"unsafe"
@@ -9,10 +10,11 @@ import (
 
 // BackupInfo represents the information about a backup.
 type BackupInfo struct {
-	ID        uint32
-	Timestamp int64
-	Size      uint64
-	NumFiles  uint32
+	ID          uint32
+	Timestamp   int64
+	Size        uint64
+	NumFiles    uint32
+	AppMetadata string
 }
 
 // BackupEngine is a reusable handle to a RocksDB Backup, created by
@@ -67,11 +69,20 @@ func CreateBackupEngineWithPath(db *DB, path string) (be *BackupEngine, err erro
 	return
 }
 
-
 // CreateNewBackup takes a new backup from db.
 func (b *BackupEngine) CreateNewBackup() (err error) {
 	var cErr *C.char
 	C.rocksdb_backup_engine_create_new_backup(b.c, b.db.c, &cErr)
+	err = fromCError(cErr)
+	return
+}
+
+// CreateNewBackup takes a new backup from db.
+func (b *BackupEngine) CreateNewBackupWithMetadata(meta string) (err error) {
+	var cErr *C.char
+	cmeta := C.CString(meta)
+	C.rocksdb_backup_engine_create_new_backup_with_meta(b.c, b.db.c, cmeta, &cErr)
+	C.free(unsafe.Pointer(cmeta))
 	err = fromCError(cErr)
 	return
 }
@@ -114,6 +125,11 @@ func (b *BackupEngine) GetInfo() (infos []BackupInfo) {
 		infos[i].Timestamp = int64(C.rocksdb_backup_engine_info_timestamp(info, index))
 		infos[i].Size = uint64(C.rocksdb_backup_engine_info_size(info, index))
 		infos[i].NumFiles = uint32(C.rocksdb_backup_engine_info_number_files(info, index))
+
+		cstr := C.rocksdb_backup_engine_info_app_metadata(info, index)
+		meta := C.GoString(cstr)
+		C.free(unsafe.Pointer(cstr))
+		infos[i].AppMetadata = meta
 	}
 
 	C.rocksdb_backup_engine_info_destroy(info)
