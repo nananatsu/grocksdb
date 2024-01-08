@@ -31,7 +31,7 @@ Please follow this guide: https://github.com/facebook/rocksdb/blob/master/INSTAL
 After installing both `rocksdb` and `grocksdb`, you can build your app using the following commands:
 
 ```bash
-CGO_CFLAGS="-I/path/to/rocksdb/include" \
+CGO_CPPFLAGS="-I/path/to/rocksdb/include" \
 CGO_LDFLAGS="-L/path/to/rocksdb -lrocksdb -lstdc++ -lm -lz -lsnappy -llz4 -lzstd" \
   go build
 ```
