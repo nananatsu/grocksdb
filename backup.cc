@@ -59,7 +59,7 @@ extern "C"
         const rocksdb_backup_engine_info_t *info, int index)
     {
         std::string meta = info->rep[index].app_metadata;
-        char *cstr = new char[meta.length()];
+        char *cstr = new char[meta.length() + 1];
         strcpy(cstr, meta.c_str());
         return cstr;
     }
