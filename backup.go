@@ -2,7 +2,7 @@ package grocksdb
 
 // #cgo CFLAGS: -I/home/flos/project/rocksdb/include
 // #include <stdlib.h>
-// #include "backup.h"
+// #include "extend.h"
 import "C"
 import (
 	"unsafe"

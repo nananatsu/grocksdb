@@ -2,6 +2,7 @@ package grocksdb
 
 // #include "rocksdb/c.h"
 // #include "grocksdb.h"
+// #include "extend.h"
 import "C"
 
 import (
@@ -195,6 +196,10 @@ func (opts *Options) SetNativeComparator(cmp unsafe.Pointer) {
 	C.rocksdb_comparator_destroy(opts.ccmp)
 	opts.ccmp = (*C.rocksdb_comparator_t)(cmp)
 	C.rocksdb_options_set_comparator(opts.c, opts.ccmp)
+}
+
+func (opts *Options) SetComparatorWithUint64Ts() {
+	C.rocksdb_options_set_comparator_with_uint64ts(opts.c)
 }
 
 // SetMergeOperator sets the merge operator which will be called

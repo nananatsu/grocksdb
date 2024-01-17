@@ -16,6 +16,8 @@ extern "C"
     extern ROCKSDB_LIBRARY_API const char *rocksdb_backup_engine_info_app_metadata(
         const rocksdb_backup_engine_info_t *info, int index);
 
+    extern ROCKSDB_LIBRARY_API void rocksdb_options_set_comparator_with_uint64ts(rocksdb_options_t*);
+
 #ifdef __cplusplus
 } /* end extern "C" */
 #endif

@@ -1,11 +1,13 @@
-#include "backup.h"
+#include "extend.h"
 #include "rocksdb/status.h"
+#include "rocksdb/comparator.h"
 #include "rocksdb/utilities/backup_engine.h"
 
 using ROCKSDB_NAMESPACE::BackupEngine;
 using ROCKSDB_NAMESPACE::BackupInfo;
 using ROCKSDB_NAMESPACE::DB;
 using ROCKSDB_NAMESPACE::Status;
+using ROCKSDB_NAMESPACE::Options;
 
 extern "C"
 {
@@ -22,6 +24,11 @@ extern "C"
     struct rocksdb_backup_engine_info_t
     {
         std::vector<BackupInfo> rep;
+    };
+
+    struct rocksdb_options_t
+    {
+        Options rep;
     };
 
     static bool SaveError(char **errptr, const Status &s)
@@ -62,5 +69,10 @@ extern "C"
         char *cstr = new char[meta.length() + 1];
         strcpy(cstr, meta.c_str());
         return cstr;
+    }
+
+    void rocksdb_options_set_comparator_with_uint64ts(rocksdb_options_t *opt)
+    {
+         opt->rep.comparator = rocksdb::BytewiseComparatorWithU64Ts();
     }
 }
