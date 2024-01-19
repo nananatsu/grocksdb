@@ -1,6 +1,7 @@
 package grocksdb
 
 // #include "rocksdb/c.h"
+// #include "extend.h"
 import "C"
 
 // ReadTier controls fetching of data during a read request.
@@ -332,6 +333,10 @@ func (opts *ReadOptions) SetTimestamp(ts []byte) {
 	cTS := refGoBytes(ts)
 	cTSLen := C.size_t(len(ts))
 	C.rocksdb_readoptions_set_timestamp(opts.c, cTS, cTSLen)
+}
+
+func (opts *ReadOptions) SetCurrentTimestamp() {
+	C.rocksdb_readoptions_set_current_timestamp(opts.c)
 }
 
 // SetIterStartTimestamp sets iter_start_ts which is the lower bound (older) and timestamp

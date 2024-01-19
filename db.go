@@ -2,6 +2,7 @@ package grocksdb
 
 // #include <stdlib.h>
 // #include "rocksdb/c.h"
+// #include "extend.h"
 import "C"
 
 import (
@@ -556,6 +557,20 @@ func (db *DB) GetWithTS(opts *ReadOptions, key []byte) (value, timestamp *Slice,
 	return
 }
 
+func (db *DB) GetWithCurrentTs(key []byte) (slice *Slice, err error) {
+	var (
+		cErr    *C.char
+		cValLen C.size_t
+		cKey    = refGoBytes(key)
+	)
+
+	cValue := C.rocksdb_get_with_current_ts(db.c, cKey, C.size_t(len(key)), &cValLen, &cErr)
+	if err = fromCError(cErr); err == nil {
+		slice = NewSlice(cValue, cValLen)
+	}
+	return
+}
+
 // GetBytes is like Get but returns a copy of the data.
 func (db *DB) GetBytes(opts *ReadOptions, key []byte) (data []byte, err error) {
 	var (
@@ -905,6 +920,18 @@ func (db *DB) PutWithTS(opts *WriteOptions, key, ts, value []byte) (err error) {
 	return
 }
 
+func (db *DB) PutWithCurrentTs(key, value []byte) (err error) {
+	var (
+		cErr   *C.char
+		cKey   = refGoBytes(key)
+		cValue = refGoBytes(value)
+	)
+	C.rocksdb_put_with_current_ts(db.c, cKey, C.size_t(len(key)), cValue, C.size_t(len(value)), &cErr)
+	err = fromCError(cErr)
+
+	return
+}
+
 // PutCF writes data associated with a key to the database and column family.
 func (db *DB) PutCF(opts *WriteOptions, cf *ColumnFamilyHandle, key, value []byte) (err error) {
 	var (
@@ -969,6 +996,18 @@ func (db *DB) DeleteWithTS(opts *WriteOptions, key, ts []byte) (err error) {
 	)
 
 	C.rocksdb_delete_with_ts(db.c, opts.c, cKey, C.size_t(len(key)), cTs, C.size_t(len(ts)), &cErr)
+	err = fromCError(cErr)
+
+	return
+}
+
+func (db *DB) DeleteWithCurrentTS(key []byte) (err error) {
+	var (
+		cErr *C.char
+		cKey = refGoBytes(key)
+	)
+
+	C.rocksdb_delete_with_current_ts(db.c, cKey, C.size_t(len(key)), &cErr)
 	err = fromCError(cErr)
 
 	return

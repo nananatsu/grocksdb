@@ -198,8 +198,8 @@ func (opts *Options) SetNativeComparator(cmp unsafe.Pointer) {
 	C.rocksdb_options_set_comparator(opts.c, opts.ccmp)
 }
 
-func (opts *Options) SetComparatorWithUint64Ts() {
-	C.rocksdb_options_set_comparator_with_uint64ts(opts.c)
+func (opts *Options) SetComparatorUint64Ts() {
+	C.rocksdb_options_set_comparator_uint64ts(opts.c)
 }
 
 // SetMergeOperator sets the merge operator which will be called
