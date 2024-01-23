@@ -571,6 +571,35 @@ func (db *DB) GetWithCurrentTs(key []byte) (slice *Slice, err error) {
 	return
 }
 
+func (db *DB) GetWithTsUint64(key []byte, ts uint64) (slice *Slice, err error) {
+	var (
+		cErr    *C.char
+		cValLen C.size_t
+		cKey    = refGoBytes(key)
+	)
+
+	cValue := C.rocksdb_get_with_ts_uint64(db.c, cKey, C.size_t(len(key)), C.uint64_t(ts), &cValLen, &cErr)
+	if err = fromCError(cErr); err == nil {
+		slice = NewSlice(cValue, cValLen)
+	}
+	return
+}
+
+func (db *DB) GetWithTsSlice(key, ts []byte) (slice *Slice, err error) {
+	var (
+		cErr    *C.char
+		cValLen C.size_t
+		cKey    = refGoBytes(key)
+		cTs     = refGoBytes(ts)
+	)
+
+	cValue := C.rocksdb_get_with_ts_slice(db.c, cKey, C.size_t(len(key)), cTs, C.size_t(len(ts)), &cValLen, &cErr)
+	if err = fromCError(cErr); err == nil {
+		slice = NewSlice(cValue, cValLen)
+	}
+	return
+}
+
 // GetBytes is like Get but returns a copy of the data.
 func (db *DB) GetBytes(opts *ReadOptions, key []byte) (data []byte, err error) {
 	var (
@@ -927,6 +956,31 @@ func (db *DB) PutWithCurrentTs(key, value []byte) (err error) {
 		cValue = refGoBytes(value)
 	)
 	C.rocksdb_put_with_current_ts(db.c, cKey, C.size_t(len(key)), cValue, C.size_t(len(value)), &cErr)
+	err = fromCError(cErr)
+
+	return
+}
+
+func (db *DB) PutWithTsUint64(key []byte, ts uint64, value []byte) (err error) {
+	var (
+		cErr   *C.char
+		cKey   = refGoBytes(key)
+		cValue = refGoBytes(value)
+	)
+	C.rocksdb_put_with_ts_uint64(db.c, cKey, C.size_t(len(key)), C.uint64_t(ts), cValue, C.size_t(len(value)), &cErr)
+	err = fromCError(cErr)
+
+	return
+}
+
+func (db *DB) PutWithTsSlice(key, ts, value []byte) (err error) {
+	var (
+		cErr   *C.char
+		cKey   = refGoBytes(key)
+		cTs    = refGoBytes(ts)
+		cValue = refGoBytes(value)
+	)
+	C.rocksdb_put_with_ts_slice(db.c, cKey, C.size_t(len(key)), cTs, C.size_t(len(ts)), cValue, C.size_t(len(value)), &cErr)
 	err = fromCError(cErr)
 
 	return

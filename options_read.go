@@ -335,8 +335,8 @@ func (opts *ReadOptions) SetTimestamp(ts []byte) {
 	C.rocksdb_readoptions_set_timestamp(opts.c, cTS, cTSLen)
 }
 
-func (opts *ReadOptions) SetCurrentTimestamp() {
-	C.rocksdb_readoptions_set_current_timestamp(opts.c)
+func (opts *ReadOptions) SetTimestampUint64(ts uint64) {
+	SetTimestampUint64(opts, ts)
 }
 
 // SetIterStartTimestamp sets iter_start_ts which is the lower bound (older) and timestamp
@@ -349,6 +349,10 @@ func (opts *ReadOptions) SetIterStartTimestamp(ts []byte) {
 	cTS := refGoBytes(ts)
 	cTSLen := C.size_t(len(ts))
 	C.rocksdb_readoptions_set_iter_start_ts(opts.c, cTS, cTSLen)
+}
+
+func (opts *ReadOptions) SetIterStartTimestampUint64(ts uint64) {
+	SetStartTimestampUint64(opts, ts)
 }
 
 // SetAutoReadaheadSize (Experimental) if auto_readahead_size is set to true, it will auto tune

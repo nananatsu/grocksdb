@@ -26,3 +26,28 @@ func DecodeUint64Ts(tsSlice []byte) (ts uint64, err error) {
 	}
 	return
 }
+
+func SetStartTimestampUint64(opts *ReadOptions, ts uint64) {
+	tsSlice := make([]byte, 8)
+	opts.timestampStart = tsSlice
+
+	cTsSlice := refGoBytes(tsSlice)
+	C.rocksdb_readoptions_set_iter_start_ts_uint64(opts.c, C.uint64_t(ts), cTsSlice)
+}
+
+func SetTimestampUint64(opts *ReadOptions, ts uint64) {
+	tsSlice := make([]byte, 8)
+	opts.timestamp = tsSlice
+
+	cTsSlice := refGoBytes(tsSlice)
+	C.rocksdb_readoptions_set_timestamp_uint64(opts.c, C.uint64_t(ts), cTsSlice)
+}
+
+func GetTimestampUint64(opts *ReadOptions) (ts uint64, err error) {
+	var cErr *C.char
+	cTs := C.rocksdb_readoptions_get_timestamp_uint64(opts.c, &cErr)
+	if err := fromCError(cErr); err == nil {
+		ts = uint64(cTs)
+	}
+	return
+}

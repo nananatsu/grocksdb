@@ -20,3 +20,19 @@ func TestUint64Ts(t *testing.T) {
 	}
 	assert.Equal(t, ts, cts)
 }
+
+func TestSetUinit64Ts(t *testing.T) {
+
+	ts := uint64(time.Now().UnixMilli())
+	opt := NewDefaultReadOptions()
+
+	SetTimestampUint64(opt, ts)
+	ots, err := GetTimestampUint64(opt)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	assert.Equal(t, ts, ots)
+
+}
