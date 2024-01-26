@@ -10,10 +10,10 @@ import (
 func TestUint64Ts(t *testing.T) {
 
 	ts := uint64(time.Now().UnixMilli())
-	tsSlice := EncodeUint64Ts(ts)
+	tsSlice := EncodeUint64TS(ts)
 	defer tsSlice.Free()
 
-	cts, err := DecodeUint64Ts(tsSlice.Data())
+	cts, err := DecodeUint64TS(tsSlice.Data())
 	if err != nil {
 		t.Error(err)
 		return
@@ -21,7 +21,7 @@ func TestUint64Ts(t *testing.T) {
 	assert.Equal(t, ts, cts)
 }
 
-func TestSetUinit64Ts(t *testing.T) {
+func TestSetReadOptionsUinit64Ts(t *testing.T) {
 
 	ts := uint64(time.Now().UnixMilli())
 	opt := NewDefaultReadOptions()

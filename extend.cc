@@ -1,46 +1,43 @@
 #include <chrono>
 #include <iostream>
 #include "extend.h"
-#include "rocksdb/db.h"
-#include "rocksdb/status.h"
 #include "rocksdb/comparator.h"
+#include "rocksdb/db.h"
+#include "rocksdb/iterator.h"
+#include "rocksdb/memtablerep.h"
+#include "rocksdb/status.h"
+#include "rocksdb/sst_file_reader.h"
 #include "rocksdb/utilities/backup_engine.h"
 
 using namespace std::chrono;
-using ROCKSDB_NAMESPACE::BackupEngine;
-using ROCKSDB_NAMESPACE::BackupInfo;
-using ROCKSDB_NAMESPACE::DB;
-using ROCKSDB_NAMESPACE::Options;
-using ROCKSDB_NAMESPACE::ReadOptions;
 using ROCKSDB_NAMESPACE::Slice;
 using ROCKSDB_NAMESPACE::Status;
-using ROCKSDB_NAMESPACE::WriteOptions;
 
 extern "C"
 {
     struct rocksdb_t
     {
-        DB *rep;
+        rocksdb::DB *rep;
     };
 
     struct rocksdb_backup_engine_t
     {
-        BackupEngine *rep;
+        rocksdb::BackupEngine *rep;
     };
 
     struct rocksdb_backup_engine_info_t
     {
-        std::vector<BackupInfo> rep;
+        std::vector<rocksdb::BackupInfo> rep;
     };
 
     struct rocksdb_options_t
     {
-        Options rep;
+        rocksdb::Options rep;
     };
 
     struct rocksdb_readoptions_t
     {
-        ReadOptions rep;
+        rocksdb::ReadOptions rep;
         // stack variables to set pointers to in ReadOptions
         Slice upper_bound;
         Slice lower_bound;
@@ -48,9 +45,22 @@ extern "C"
         Slice iter_start_ts;
     };
 
-    using time_stamp = std::chrono::time_point<std::chrono::system_clock, std::chrono::microseconds>;
+    struct rocksdb_column_family_handle_t
+    {
+        rocksdb::ColumnFamilyHandle *rep;
+    };
 
-    static WriteOptions &default_rocksdb_write_option = *new WriteOptions;
+    struct rocksdb_iterator_t
+    {
+        rocksdb::Iterator *rep;
+    };
+
+    struct rocksdb_sstfilereader_t
+    {
+        rocksdb::SstFileReader *rep;
+    };
+
+    static rocksdb::WriteOptions &default_rocksdb_write_option = *new rocksdb::WriteOptions;
 
     static char *CopyString(const std::string &str)
     {
@@ -80,12 +90,12 @@ extern "C"
         return true;
     }
 
-    void rocksdb_backup_engine_create_new_backup_with_meta(rocksdb_backup_engine_t *be, rocksdb_t *db, const char *meta, char **errptr)
+    void rocksdb_backup_engine_create_new_backup_with_metadata(rocksdb_backup_engine_t *be, rocksdb_t *db, const char *meta, char **errptr)
     {
         SaveError(errptr, be->rep->CreateNewBackupWithMetadata(db->rep, meta));
     }
 
-    void rocksdb_backup_engine_create_new_backup_with_meta_flush(rocksdb_backup_engine_t *be, rocksdb_t *db, const char *meta, unsigned char flush_before_backup, char **errptr)
+    void rocksdb_backup_engine_create_new_backup_flush_with_metadata(rocksdb_backup_engine_t *be, rocksdb_t *db, const char *meta, unsigned char flush_before_backup, char **errptr)
     {
         SaveError(errptr, be->rep->CreateNewBackupWithMetadata(db->rep, meta, flush_before_backup));
     }
@@ -95,7 +105,7 @@ extern "C"
         return CopyString(info->rep[index].app_metadata);
     }
 
-    void rocksdb_options_set_comparator_uint64ts(rocksdb_options_t *opt)
+    void rocksdb_options_set_comparator_built_in_uint64ts(rocksdb_options_t *opt)
     {
         opt->rep.comparator = rocksdb::BytewiseComparatorWithU64Ts();
     }
@@ -119,44 +129,96 @@ extern "C"
         return ts;
     }
 
-    void rocksdb_readoptions_set_current_timestamp(rocksdb_readoptions_t *opt)
+    void rocksdb_readoptions_set_timestamp_uint64(rocksdb_readoptions_t *opt, uint64_t ts, char *tsSlice)
     {
         std::string ts_buf;
-        uint64_t u_ts = static_cast<uint64_t>(time_point_cast<microseconds>(system_clock::now()).time_since_epoch().count());
-
-        opt->timestamp = rocksdb::EncodeU64Ts(u_ts, &ts_buf);
+        rocksdb::EncodeU64Ts(ts, &ts_buf);
+        memcpy(tsSlice, ts_buf.data(), sizeof(char) * ts_buf.size());
+        opt->timestamp = Slice(tsSlice, ts_buf.size());
         opt->rep.timestamp = &opt->timestamp;
+    }
+
+    uint64_t rocksdb_readoptions_get_timestamp_uint64(rocksdb_readoptions_t *opt, char **errptr)
+    {
+        uint64_t u_ts;
+        Status s = rocksdb::DecodeU64Ts(opt->timestamp, &u_ts);
+        if (!s.ok())
+        {
+            SaveError(errptr, s);
+        }
+        return u_ts;
+    }
+
+    void rocksdb_readoptions_set_iter_start_ts_uint64(rocksdb_readoptions_t *opt, uint64_t ts, char *tsSlice)
+    {
+        std::string ts_buf;
+        rocksdb::EncodeU64Ts(ts, &ts_buf);
+        memcpy(tsSlice, ts_buf.data(), sizeof(char) * ts_buf.size());
+        opt->iter_start_ts = Slice(tsSlice, ts_buf.size());
+        opt->rep.iter_start_ts = &opt->iter_start_ts;
     }
 
     void rocksdb_put_with_current_ts(rocksdb_t *db, const char *key, size_t keylen, const char *val, size_t vallen, char **errptr)
     {
-        uint64_t u_ts = static_cast<uint64_t>(time_point_cast<microseconds>(system_clock::now()).time_since_epoch().count());
+        uint64_t u_ts = static_cast<uint64_t>(time_point_cast<milliseconds>(system_clock::now()).time_since_epoch().count());
         std::string ts_buf;
         SaveError(errptr, db->rep->Put(default_rocksdb_write_option, Slice(key, keylen), rocksdb::EncodeU64Ts(u_ts, &ts_buf), Slice(val, vallen)));
+    }
+
+    void rocksdb_put_with_uint64_ts(rocksdb_t *db, const char *key, size_t keylen, uint64_t ts, const char *val, size_t vallen, char **errptr)
+    {
+        std::string ts_buf;
+        SaveError(errptr, db->rep->Put(default_rocksdb_write_option, Slice(key, keylen), rocksdb::EncodeU64Ts(ts, &ts_buf), Slice(val, vallen)));
+    }
+
+    void rocksdb_put_with_fixed64_ts(rocksdb_t *db, const char *key, size_t keylen, const char *ts, size_t tslen, const char *val, size_t vallen, char **errptr)
+    {
+        SaveError(errptr, db->rep->Put(default_rocksdb_write_option, Slice(key, keylen), Slice(ts, tslen), Slice(val, vallen)));
     }
 
     void rocksdb_delete_with_current_ts(rocksdb_t *db, const char *key, size_t keylen, char **errptr)
     {
         std::string ts_buf;
-        uint64_t u_ts = static_cast<uint64_t>(time_point_cast<microseconds>(system_clock::now()).time_since_epoch().count());
+        uint64_t u_ts = static_cast<uint64_t>(time_point_cast<milliseconds>(system_clock::now()).time_since_epoch().count());
         SaveError(errptr, db->rep->Delete(default_rocksdb_write_option, Slice(key, keylen), rocksdb::EncodeU64Ts(u_ts, &ts_buf)));
     }
 
-    char *rocksdb_get_with_current_ts(rocksdb_t *db, const char *key, size_t keylen, size_t *vallen, char **errptr)
+    void rocksdb_delete_with_uint64_ts(rocksdb_t *db, const char *key, size_t keylen, uint64_t ts, char **errptr)
+    {
+        std::string ts_buf;
+        SaveError(errptr, db->rep->Delete(default_rocksdb_write_option, Slice(key, keylen), rocksdb::EncodeU64Ts(ts, &ts_buf)));
+    }
+
+    void rocksdb_delete_with_fixed64_ts(rocksdb_t *db, const char *key, size_t keylen, const char *ts, size_t tslen, char **errptr)
+    {
+        SaveError(errptr, db->rep->Delete(default_rocksdb_write_option, Slice(key, keylen), Slice(ts, tslen)));
+    }
+
+    void rocksdb_delete_range_cf_uint64_ts(rocksdb_t *db, rocksdb_column_family_handle_t *column_family, const char *start_key, size_t start_key_len, const char *end_key, size_t end_key_len, uint64_t ts, char **errptr)
+    {
+        std::string ts_buf;
+        SaveError(errptr, db->rep->DeleteRange(default_rocksdb_write_option, column_family->rep,
+                                               Slice(start_key, start_key_len),
+                                               Slice(end_key, end_key_len),
+                                               rocksdb::EncodeU64Ts(ts, &ts_buf)));
+    }
+
+    void rocksdb_delete_range_cf_fixed64_ts(rocksdb_t *db, rocksdb_column_family_handle_t *column_family, const char *start_key, size_t start_key_len, const char *end_key, size_t end_key_len, const char *ts, size_t tslen, char **errptr)
+    {
+        SaveError(errptr, db->rep->DeleteRange(default_rocksdb_write_option, column_family->rep,
+                                               Slice(start_key, start_key_len),
+                                               Slice(end_key, end_key_len),
+                                               Slice(ts, tslen)));
+    }
+
+    char *rocksdb_get_with_fixed_ts(rocksdb_t *db, const char *key, size_t keylen, Slice *ts_slice, size_t *vallen, char **errptr)
     {
         char *result = nullptr;
         std::string tmp;
 
-        // rocksdb_readoptions_t *opt = rocksdb_readoptions_create();
-        // rocksdb_readoptions_t *opt = new rocksdb_readoptions_t;
-        // rocksdb_readoptions_set_current_timestamp(opt);
-        std::string ts_buf;
-        uint64_t u_ts = static_cast<uint64_t>(time_point_cast<microseconds>(system_clock::now()).time_since_epoch().count());
-        ReadOptions &opt = *new ReadOptions;
-        Slice ts = rocksdb::EncodeU64Ts(u_ts, &ts_buf);
-        opt.timestamp = &ts;
+        rocksdb::ReadOptions &opt = *new rocksdb::ReadOptions;
+        opt.timestamp = ts_slice;
 
-        // Status s = db->rep->Get(opt->rep, Slice(key, keylen), &tmp);
         Status s = db->rep->Get(opt, Slice(key, keylen), &tmp);
         if (s.ok())
         {
@@ -172,8 +234,52 @@ extern "C"
             }
         }
 
-        // rocksdb_readoptions_destroy(opt);
         delete &opt;
         return result;
+    }
+
+    char *rocksdb_get_with_current_ts(rocksdb_t *db, const char *key, size_t keylen, size_t *vallen, char **errptr)
+    {
+        std::string ts_buf;
+        Slice ts = rocksdb::EncodeU64Ts(static_cast<uint64_t>(time_point_cast<milliseconds>(system_clock::now()).time_since_epoch().count()), &ts_buf);
+        return rocksdb_get_with_fixed_ts(db, key, keylen, &ts, vallen, errptr);
+    }
+
+    char *rocksdb_get_with_uint64_ts(rocksdb_t *db, const char *key, size_t keylen, uint64_t ts, size_t *vallen, char **errptr)
+    {
+        std::string ts_buf;
+        Slice ts_slice = rocksdb::EncodeU64Ts(ts, &ts_buf);
+        return rocksdb_get_with_fixed_ts(db, key, keylen, &ts_slice, vallen, errptr);
+    }
+
+    char *rocksdb_get_with_fixed64_ts(rocksdb_t *db, const char *key, size_t keylen, const char *ts, size_t tslen, size_t *vallen, char **errptr)
+    {
+        Slice ts_slice = Slice(ts, tslen);
+        return rocksdb_get_with_fixed_ts(db, key, keylen, &ts_slice, vallen, errptr);
+    }
+
+    rocksdb_sstfilereader_t *rocksdb_sstfilereader_create(rocksdb_options_t *opt)
+    {
+        rocksdb_sstfilereader_t *reader = new rocksdb_sstfilereader_t;
+        reader->rep = new rocksdb::SstFileReader(opt->rep);
+        return reader;
+    }
+
+    void rocksdb_sstfilereader_open(rocksdb_sstfilereader_t *reader, const char *file_path, char **errptr)
+    {
+        SaveError(errptr, reader->rep->Open(std::string(file_path)));
+    }
+
+    rocksdb_iterator_t *rocksdb_sstfilereader_iterator(rocksdb_sstfilereader_t *reader, rocksdb_readoptions_t *opt)
+    {
+        rocksdb_iterator_t *ite = new rocksdb_iterator_t;
+        ite->rep = reader->rep->NewIterator(opt->rep);
+        return ite;
+    }
+
+    void rocksdb_sstfilereader_destroy(rocksdb_sstfilereader_t *reader)
+    {
+        delete reader->rep;
+        delete reader;
     }
 }

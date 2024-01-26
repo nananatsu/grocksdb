@@ -81,7 +81,7 @@ func (b *BackupEngine) CreateNewBackup() (err error) {
 func (b *BackupEngine) CreateNewBackupWithMetadata(meta string) (err error) {
 	var cErr *C.char
 	cmeta := C.CString(meta)
-	C.rocksdb_backup_engine_create_new_backup_with_meta(b.c, b.db.c, cmeta, &cErr)
+	C.rocksdb_backup_engine_create_new_backup_with_metadata(b.c, b.db.c, cmeta, &cErr)
 	C.free(unsafe.Pointer(cmeta))
 	err = fromCError(cErr)
 	return
@@ -97,10 +97,10 @@ func (b *BackupEngine) CreateNewBackupFlush(flushBeforeBackup bool) (err error) 
 }
 
 // CreateNewBackup takes a new backup from db.
-func (b *BackupEngine) CreateNewBackupWithMetadataFlush(meta string, flushBeforeBackup bool) (err error) {
+func (b *BackupEngine) CreateNewBackupFlushWithMetadata(meta string, flushBeforeBackup bool) (err error) {
 	var cErr *C.char
 	cmeta := C.CString(meta)
-	C.rocksdb_backup_engine_create_new_backup_with_meta_flush(b.c, b.db.c, cmeta, boolToChar(flushBeforeBackup), &cErr)
+	C.rocksdb_backup_engine_create_new_backup_flush_with_metadata(b.c, b.db.c, cmeta, boolToChar(flushBeforeBackup), &cErr)
 	C.free(unsafe.Pointer(cmeta))
 	err = fromCError(cErr)
 	return

@@ -4,8 +4,43 @@ package grocksdb
 // #include "rocksdb/c.h"
 // #include "extend.h"
 import "C"
+import (
+	"unsafe"
+)
 
-func EncodeUint64Ts(ts uint64) *Slice {
+type SSTFileReader struct {
+	c *C.rocksdb_sstfilereader_t
+}
+
+func NewSSTFileReader(dbOpts *Options) *SSTFileReader {
+	c := C.rocksdb_sstfilereader_create(dbOpts.c)
+	return &SSTFileReader{c: c}
+}
+
+func (r *SSTFileReader) Open(path string) (err error) {
+	var (
+		cErr  *C.char
+		cPath = C.CString(path)
+	)
+
+	C.rocksdb_sstfilereader_open(r.c, cPath, &cErr)
+	err = fromCError(cErr)
+
+	C.free(unsafe.Pointer(cPath))
+	return
+}
+
+func (r *SSTFileReader) NewIterator(opts *ReadOptions) *Iterator {
+	cIter := C.rocksdb_sstfilereader_iterator(r.c, opts.c)
+	return newNativeIterator(cIter)
+}
+
+func (r *SSTFileReader) Destroy() {
+	C.rocksdb_sstfilereader_destroy(r.c)
+	r.c = nil
+}
+
+func EncodeUint64TS(ts uint64) *Slice {
 	var (
 		cTs    *C.char
 		cTsLen C.size_t
@@ -14,7 +49,7 @@ func EncodeUint64Ts(ts uint64) *Slice {
 	return NewSlice(cTs, cTsLen)
 }
 
-func DecodeUint64Ts(tsSlice []byte) (ts uint64, err error) {
+func DecodeUint64TS(tsSlice []byte) (ts uint64, err error) {
 	var (
 		cErr     *C.char
 		cTsSlice = refGoBytes(tsSlice)

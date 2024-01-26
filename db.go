@@ -557,7 +557,7 @@ func (db *DB) GetWithTS(opts *ReadOptions, key []byte) (value, timestamp *Slice,
 	return
 }
 
-func (db *DB) GetWithCurrentTs(key []byte) (slice *Slice, err error) {
+func (db *DB) GetWithCurrentTS(key []byte) (slice *Slice, err error) {
 	var (
 		cErr    *C.char
 		cValLen C.size_t
@@ -571,21 +571,21 @@ func (db *DB) GetWithCurrentTs(key []byte) (slice *Slice, err error) {
 	return
 }
 
-func (db *DB) GetWithTsUint64(key []byte, ts uint64) (slice *Slice, err error) {
+func (db *DB) GetWithUint64TS(key []byte, ts uint64) (slice *Slice, err error) {
 	var (
 		cErr    *C.char
 		cValLen C.size_t
 		cKey    = refGoBytes(key)
 	)
 
-	cValue := C.rocksdb_get_with_ts_uint64(db.c, cKey, C.size_t(len(key)), C.uint64_t(ts), &cValLen, &cErr)
+	cValue := C.rocksdb_get_with_uint64_ts(db.c, cKey, C.size_t(len(key)), C.uint64_t(ts), &cValLen, &cErr)
 	if err = fromCError(cErr); err == nil {
 		slice = NewSlice(cValue, cValLen)
 	}
 	return
 }
 
-func (db *DB) GetWithTsSlice(key, ts []byte) (slice *Slice, err error) {
+func (db *DB) GetWithFixed64TS(key, ts []byte) (slice *Slice, err error) {
 	var (
 		cErr    *C.char
 		cValLen C.size_t
@@ -593,7 +593,7 @@ func (db *DB) GetWithTsSlice(key, ts []byte) (slice *Slice, err error) {
 		cTs     = refGoBytes(ts)
 	)
 
-	cValue := C.rocksdb_get_with_ts_slice(db.c, cKey, C.size_t(len(key)), cTs, C.size_t(len(ts)), &cValLen, &cErr)
+	cValue := C.rocksdb_get_with_fixed64_ts(db.c, cKey, C.size_t(len(key)), cTs, C.size_t(len(ts)), &cValLen, &cErr)
 	if err = fromCError(cErr); err == nil {
 		slice = NewSlice(cValue, cValLen)
 	}
@@ -949,7 +949,7 @@ func (db *DB) PutWithTS(opts *WriteOptions, key, ts, value []byte) (err error) {
 	return
 }
 
-func (db *DB) PutWithCurrentTs(key, value []byte) (err error) {
+func (db *DB) PutWithCurrentTS(key, value []byte) (err error) {
 	var (
 		cErr   *C.char
 		cKey   = refGoBytes(key)
@@ -961,26 +961,26 @@ func (db *DB) PutWithCurrentTs(key, value []byte) (err error) {
 	return
 }
 
-func (db *DB) PutWithTsUint64(key []byte, ts uint64, value []byte) (err error) {
+func (db *DB) PutWithUint64TS(key []byte, ts uint64, value []byte) (err error) {
 	var (
 		cErr   *C.char
 		cKey   = refGoBytes(key)
 		cValue = refGoBytes(value)
 	)
-	C.rocksdb_put_with_ts_uint64(db.c, cKey, C.size_t(len(key)), C.uint64_t(ts), cValue, C.size_t(len(value)), &cErr)
+	C.rocksdb_put_with_uint64_ts(db.c, cKey, C.size_t(len(key)), C.uint64_t(ts), cValue, C.size_t(len(value)), &cErr)
 	err = fromCError(cErr)
 
 	return
 }
 
-func (db *DB) PutWithTsSlice(key, ts, value []byte) (err error) {
+func (db *DB) PutWithFixed64TS(key, ts, value []byte) (err error) {
 	var (
 		cErr   *C.char
 		cKey   = refGoBytes(key)
 		cTs    = refGoBytes(ts)
 		cValue = refGoBytes(value)
 	)
-	C.rocksdb_put_with_ts_slice(db.c, cKey, C.size_t(len(key)), cTs, C.size_t(len(ts)), cValue, C.size_t(len(value)), &cErr)
+	C.rocksdb_put_with_fixed64_ts(db.c, cKey, C.size_t(len(key)), cTs, C.size_t(len(ts)), cValue, C.size_t(len(value)), &cErr)
 	err = fromCError(cErr)
 
 	return
@@ -1067,6 +1067,31 @@ func (db *DB) DeleteWithCurrentTS(key []byte) (err error) {
 	return
 }
 
+func (db *DB) DeleteWithUint64TS(key []byte, ts uint64) (err error) {
+	var (
+		cErr *C.char
+		cKey = refGoBytes(key)
+	)
+
+	C.rocksdb_delete_with_uint64_ts(db.c, cKey, C.size_t(len(key)), C.uint64_t(ts), &cErr)
+	err = fromCError(cErr)
+
+	return
+}
+
+func (db *DB) DeleteWithFixed64TS(key, ts []byte) (err error) {
+	var (
+		cErr *C.char
+		cKey = refGoBytes(key)
+		cTs  = refGoBytes(ts)
+	)
+
+	C.rocksdb_delete_with_fixed64_ts(db.c, cKey, C.size_t(len(key)), cTs, C.size_t(len(ts)), &cErr)
+	err = fromCError(cErr)
+
+	return
+}
+
 // DeleteCFWithTS removes the data associated with the key and timestamp from the database and column family.
 func (db *DB) DeleteCFWithTS(opts *WriteOptions, cf *ColumnFamilyHandle, key, ts []byte) (err error) {
 	var (
@@ -1118,6 +1143,33 @@ func (db *DB) DeleteRangeCF(opts *WriteOptions, cf *ColumnFamilyHandle, startKey
 	)
 
 	C.rocksdb_delete_range_cf(db.c, opts.c, cf.c, cStartKey, C.size_t(len(startKey)), cEndKey, C.size_t(len(endKey)), &cErr)
+	err = fromCError(cErr)
+
+	return
+}
+
+func (db *DB) DeleteRangeCFWithUint64TS(cf *ColumnFamilyHandle, startKey []byte, endKey []byte, ts uint64) (err error) {
+	var (
+		cErr      *C.char
+		cStartKey = refGoBytes(startKey)
+		cEndKey   = refGoBytes(endKey)
+	)
+
+	C.rocksdb_delete_range_cf_uint64_ts(db.c, cf.c, cStartKey, C.size_t(len(startKey)), cEndKey, C.size_t(len(endKey)), C.uint64_t(ts), &cErr)
+	err = fromCError(cErr)
+
+	return
+}
+
+func (db *DB) DeleteRangeCFWithFixed64TS(cf *ColumnFamilyHandle, startKey []byte, endKey []byte, ts []byte) (err error) {
+	var (
+		cErr      *C.char
+		cStartKey = refGoBytes(startKey)
+		cEndKey   = refGoBytes(endKey)
+		cTs       = refGoBytes(ts)
+	)
+
+	C.rocksdb_delete_range_cf_fixed64_ts(db.c, cf.c, cStartKey, C.size_t(len(startKey)), cEndKey, C.size_t(len(endKey)), cTs, C.size_t(len(ts)), &cErr)
 	err = fromCError(cErr)
 
 	return
