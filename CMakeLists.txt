@@ -1,4 +1,4 @@
-# cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+# cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug  -DROCKSDB=rocksdb_path
 # cmake --build build
 cmake_minimum_required(VERSION 3.14)
 project(grocksdb)
@@ -21,16 +21,17 @@ FetchContent_MakeAvailable(googletest)
 
 enable_testing()
 
-add_library(extend extend.cc)
+add_library(extend extend.cc extend_inner.cc)
 target_link_libraries(extend PRIVATE "-L${ROCKSDB} -lrocksdb -lstdc++ -lm -lz -lsnappy -llz4 -lzstd -lbz2")
-target_compile_options(extend PRIVATE "-I${ROCKSDB}/include")
+target_compile_options(extend PRIVATE "-I${ROCKSDB}/include" "-I${ROCKSDB}")
 
 add_executable(
   extend_test
   extend_test.cc
+  extend_inner_test.cc
 )
 target_link_libraries(
-    extend_test
+  extend_test
   GTest::gtest_main 
   extend
 )
