@@ -29,6 +29,7 @@ extern "C"
     extern void rocksdb_delete_with_uint64_ts(rocksdb_t *db, const char *key, size_t keylen, uint64_t ts, char **errptr);
     extern void rocksdb_delete_with_fixed64_ts(rocksdb_t *db, const char *key, size_t keylen, const char *ts, size_t tslen, char **errptr);
 
+    extern void rocksdb_delete_range_cf_current_ts(rocksdb_t *db, rocksdb_column_family_handle_t *column_family, const char *start_key, size_t start_key_len, const char *end_key, size_t end_key_len, char **errptr);
     extern void rocksdb_delete_range_cf_uint64_ts(rocksdb_t *db, rocksdb_column_family_handle_t *column_family, const char *start_key, size_t start_key_len, const char *end_key, size_t end_key_len, uint64_t ts, char **errptr);
     extern void rocksdb_delete_range_cf_fixed64_ts(rocksdb_t *db, rocksdb_column_family_handle_t *column_family, const char *start_key, size_t start_key_len, const char *end_key, size_t end_key_len, const char *ts, size_t tslen, char **errptr);
 
@@ -36,6 +37,7 @@ extern "C"
     extern char *rocksdb_get_with_uint64_ts(rocksdb_t *db, const char *key, size_t keylen, uint64_t ts, size_t *vallen, char **errptr);
     extern char *rocksdb_get_with_fixed64_ts(rocksdb_t *db, const char *key, size_t keylen, const char *ts, size_t tslen, size_t *vallen, char **errptr);
 
+    extern void rocksdb_sstfilewriter_delete_range_with_ts(rocksdb_sstfilewriter_t *writer, const char *begin_key, size_t begin_keylen, const char *end_key, size_t end_keylen, const char *ts, size_t tslen, char **errptr);
     extern rocksdb_sstfilereader_t *rocksdb_sstfilereader_create(rocksdb_options_t *opt);
     extern void rocksdb_sstfilereader_open(rocksdb_sstfilereader_t *reader, const char *file_path, char **errptr);
     extern rocksdb_iterator_t *rocksdb_sstfilereader_iterator(rocksdb_sstfilereader_t *reader, rocksdb_readoptions_t *opt);

@@ -8,7 +8,18 @@ package grocksdb
 // #include "extend_inner.h"
 import "C"
 
-import "bytes"
+import (
+	"bytes"
+	"sync"
+	"unsafe"
+)
+
+func toGoBytes(cChar *C.char, cLen C.size_t) []byte {
+	cCharPtr := unsafe.Pointer(cChar)
+	ret := C.GoBytes(cCharPtr, C.int(cLen))
+	C.free(cCharPtr)
+	return ret
+}
 
 type InternalIterator struct {
 	c *C.rocksdb_internal_iterator_t
@@ -114,13 +125,20 @@ func (m *Memtable) Add(seq uint64, key []byte, value []byte) (err error) {
 
 	C.rocksdb_memtable_add(m.c, C.uint64_t(seq), cKey, C.size_t(len(key)), cValue, C.size_t(len(value)), &cErr)
 	err = fromCError(cErr)
-
 	return
 }
 
 func (m *Memtable) NewIterator(opts *ReadOptions) *InternalIterator {
 	cIter := C.rocksdb_memtable_iterator(m.c, opts.c)
 	return &InternalIterator{c: cIter}
+}
+
+func (m *Memtable) NewRangeTombstoneIterator(opts *ReadOptions) (iter *InternalIterator, err error) {
+	var cErr *C.char
+	cIter := C.rocksdb_memtable_range_tombstone_iterator(m.c, opts.c, &cErr)
+	err = fromCError(cErr)
+	iter = &InternalIterator{c: cIter}
+	return
 }
 
 func (m *Memtable) Destroy() {
@@ -133,23 +151,81 @@ func NewMemtable(dbOpts *Options, earliestSeq uint64, columnFamilyId uint32) *Me
 	return &Memtable{c: c}
 }
 
-type ColumnFamilyData struct {
-	c *C.rocksdb_column_family_data_t
+type RangeTombstone struct {
+	StartKey []byte
+	EndKey   []byte
+	Ts       []byte
+	Seq      uint64
 }
 
-func (cfd *ColumnFamilyData) GetMemtable() *Memtable {
-	c := C.rocksdb_column_family_data_get_memtable(cfd.c)
-	return &Memtable{c: c}
+type RangeTombstoneIterator struct {
+	c    *C.range_tombstone_list_t
+	mu   sync.Mutex
+	cur  int
+	size int
 }
 
-func (h *ColumnFamilyHandle) GetColumnFamilyData() *ColumnFamilyData {
-	return &ColumnFamilyData{c: C.rocksdb_column_family_handle_get_cfd(h.c)}
+func (iter *RangeTombstoneIterator) Next() (tombstone *RangeTombstone, ok bool) {
+	iter.mu.Lock()
+	cur := iter.cur
+	if cur < iter.size {
+		ok = true
+		iter.cur++
+	}
+	iter.mu.Unlock()
+
+	if !ok {
+		return
+	}
+	cCur := C.int(cur)
+	tombstone = &RangeTombstone{}
+
+	var cLen C.size_t
+	tombstone.StartKey = toGoBytes(C.rocksdb_range_tombstone_list_get_start_key(iter.c, cCur, &cLen), cLen)
+	tombstone.EndKey = toGoBytes(C.rocksdb_range_tombstone_list_get_end_key(iter.c, cCur, &cLen), cLen)
+	tombstone.Ts = toGoBytes(C.rocksdb_range_tombstone_list_get_ts(iter.c, cCur, &cLen), cLen)
+	tombstone.Seq = uint64(C.rocksdb_range_tombstone_list_get_seq(iter.c, cCur))
+	return tombstone, true
 }
 
-func (db *DB) NewInternalIterator(opts *ReadOptions, cfh *ColumnFamilyHandle) *InternalIterator {
+func (iter *RangeTombstoneIterator) Close() {
+	C.rocksdb_range_tombstone_list_destory(iter.c)
+	iter.c = nil
+}
+
+func NewRangeTombstoneIterator(cList *C.range_tombstone_list_t) *RangeTombstoneIterator {
+	return &RangeTombstoneIterator{
+		c:    cList,
+		size: int(C.rocksdb_range_tombstone_list_size(cList)),
+	}
+}
+
+func (cfh *ColumnFamilyHandle) NewMemtableIterator(opts *ReadOptions) (iter *InternalIterator) {
+	cIter := C.rocksdb_column_family_handle_memtable_iterator_create(cfh.c, opts.c)
+	iter = &InternalIterator{c: cIter}
+	return
+}
+
+func (cfh *ColumnFamilyHandle) NewMemtableRangeTombstoneIterator(opts *ReadOptions) (iter *InternalIterator, err error) {
+	var cErr *C.char
+	cIter := C.rocksdb_column_family_handle_memtable_range_tombstone_iterator_create(cfh.c, opts.c, &cErr)
+	err = fromCError(cErr)
+	iter = &InternalIterator{c: cIter}
+	return
+}
+
+func (cfh *ColumnFamilyHandle) NewRangeTombstoneIterator(db *DB, opts *ReadOptions) (ite *RangeTombstoneIterator, err error) {
+	var cErr *C.char
+	cList := C.rocksdb_column_family_handle_range_tombstone_list(db.c, cfh.c, opts.c, &cErr)
+	err = fromCError(cErr)
+	ite = NewRangeTombstoneIterator(cList)
+	return
+}
+
+func (db *DB) NewInternalIterator(cfh *ColumnFamilyHandle, opts *ReadOptions) *InternalIterator {
 	return &InternalIterator{c: C.rocksdb_internal_iterator_create(db.c, cfh.c, opts.c)}
 }
 
-func (db *DB) NewWrappedInternalIterator(opts *ReadOptions, cfh *ColumnFamilyHandle) *Iterator {
+func (db *DB) NewWrappedInternalIterator(cfh *ColumnFamilyHandle, opts *ReadOptions) *Iterator {
 	return &Iterator{c: C.rocksdb_wrapped_internal_iterator_create(db.c, cfh.c, opts.c)}
 }

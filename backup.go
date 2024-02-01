@@ -1,6 +1,5 @@
 package grocksdb
 
-// #cgo CFLAGS: -I/home/flos/project/rocksdb/include
 // #include <stdlib.h>
 // #include "extend.h"
 import "C"

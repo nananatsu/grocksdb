@@ -2,6 +2,7 @@ package grocksdb
 
 // #include <stdlib.h>
 // #include "rocksdb/c.h"
+// #include "extend.h"
 import "C"
 
 import (
@@ -114,6 +115,16 @@ func (w *SSTFileWriter) DeleteRange(startKey, endKey []byte) (err error) {
 	cEndKey := refGoBytes(endKey)
 	var cErr *C.char
 	C.rocksdb_sstfilewriter_delete_range(w.c, cStartKey, C.size_t(len(startKey)), cEndKey, C.size_t(len(endKey)), &cErr)
+	err = fromCError(cErr)
+	return
+}
+
+func (w *SSTFileWriter) DeleteRangeWithTS(startKey, endKey, ts []byte) (err error) {
+	cStartKey := refGoBytes(startKey)
+	cEndKey := refGoBytes(endKey)
+	cTs := refGoBytes(ts)
+	var cErr *C.char
+	C.rocksdb_sstfilewriter_delete_range_with_ts(w.c, cStartKey, C.size_t(len(startKey)), cEndKey, C.size_t(len(endKey)), cTs, C.size_t(len(ts)), &cErr)
 	err = fromCError(cErr)
 	return
 }

@@ -55,6 +55,11 @@ extern "C"
         rocksdb::Iterator *rep;
     };
 
+    struct rocksdb_sstfilewriter_t
+    {
+        rocksdb::SstFileWriter *rep;
+    };
+
     struct rocksdb_sstfilereader_t
     {
         rocksdb::SstFileReader *rep;
@@ -121,7 +126,7 @@ extern "C"
     uint64_t rocksdb_uint64ts_decode(const char *tsSlice, size_t tslen, char **errptr)
     {
         uint64_t ts;
-        Status s = rocksdb::DecodeU64Ts(Slice(tsSlice, tslen), &ts);
+        auto s = rocksdb::DecodeU64Ts(Slice(tsSlice, tslen), &ts);
         if (!s.ok())
         {
             SaveError(errptr, s);
@@ -141,7 +146,7 @@ extern "C"
     uint64_t rocksdb_readoptions_get_timestamp_uint64(rocksdb_readoptions_t *opt, char **errptr)
     {
         uint64_t u_ts;
-        Status s = rocksdb::DecodeU64Ts(opt->timestamp, &u_ts);
+        auto s = rocksdb::DecodeU64Ts(opt->timestamp, &u_ts);
         if (!s.ok())
         {
             SaveError(errptr, s);
@@ -160,7 +165,7 @@ extern "C"
 
     void rocksdb_put_with_current_ts(rocksdb_t *db, const char *key, size_t keylen, const char *val, size_t vallen, char **errptr)
     {
-        uint64_t u_ts = static_cast<uint64_t>(time_point_cast<milliseconds>(system_clock::now()).time_since_epoch().count());
+        auto u_ts = static_cast<uint64_t>(time_point_cast<milliseconds>(system_clock::now()).time_since_epoch().count());
         std::string ts_buf;
         SaveError(errptr, db->rep->Put(default_rocksdb_write_option, Slice(key, keylen), rocksdb::EncodeU64Ts(u_ts, &ts_buf), Slice(val, vallen)));
     }
@@ -179,7 +184,7 @@ extern "C"
     void rocksdb_delete_with_current_ts(rocksdb_t *db, const char *key, size_t keylen, char **errptr)
     {
         std::string ts_buf;
-        uint64_t u_ts = static_cast<uint64_t>(time_point_cast<milliseconds>(system_clock::now()).time_since_epoch().count());
+        auto u_ts = static_cast<uint64_t>(time_point_cast<milliseconds>(system_clock::now()).time_since_epoch().count());
         SaveError(errptr, db->rep->Delete(default_rocksdb_write_option, Slice(key, keylen), rocksdb::EncodeU64Ts(u_ts, &ts_buf)));
     }
 
@@ -192,6 +197,16 @@ extern "C"
     void rocksdb_delete_with_fixed64_ts(rocksdb_t *db, const char *key, size_t keylen, const char *ts, size_t tslen, char **errptr)
     {
         SaveError(errptr, db->rep->Delete(default_rocksdb_write_option, Slice(key, keylen), Slice(ts, tslen)));
+    }
+
+    void rocksdb_delete_range_cf_current_ts(rocksdb_t *db, rocksdb_column_family_handle_t *column_family, const char *start_key, size_t start_key_len, const char *end_key, size_t end_key_len, char **errptr)
+    {
+        std::string ts_buf;
+        auto u_ts = static_cast<uint64_t>(time_point_cast<milliseconds>(system_clock::now()).time_since_epoch().count());
+        SaveError(errptr, db->rep->DeleteRange(default_rocksdb_write_option, column_family->rep,
+                                               Slice(start_key, start_key_len),
+                                               Slice(end_key, end_key_len),
+                                               rocksdb::EncodeU64Ts(u_ts, &ts_buf)));
     }
 
     void rocksdb_delete_range_cf_uint64_ts(rocksdb_t *db, rocksdb_column_family_handle_t *column_family, const char *start_key, size_t start_key_len, const char *end_key, size_t end_key_len, uint64_t ts, char **errptr)
@@ -216,10 +231,10 @@ extern "C"
         char *result = nullptr;
         std::string tmp;
 
-        rocksdb::ReadOptions &opt = *new rocksdb::ReadOptions;
+        auto &opt = *new rocksdb::ReadOptions;
         opt.timestamp = ts_slice;
 
-        Status s = db->rep->Get(opt, Slice(key, keylen), &tmp);
+        auto s = db->rep->Get(opt, Slice(key, keylen), &tmp);
         if (s.ok())
         {
             *vallen = tmp.size();
@@ -233,7 +248,6 @@ extern "C"
                 SaveError(errptr, s);
             }
         }
-
         delete &opt;
         return result;
     }
@@ -241,26 +255,31 @@ extern "C"
     char *rocksdb_get_with_current_ts(rocksdb_t *db, const char *key, size_t keylen, size_t *vallen, char **errptr)
     {
         std::string ts_buf;
-        Slice ts = rocksdb::EncodeU64Ts(static_cast<uint64_t>(time_point_cast<milliseconds>(system_clock::now()).time_since_epoch().count()), &ts_buf);
+        auto ts = rocksdb::EncodeU64Ts(static_cast<uint64_t>(time_point_cast<milliseconds>(system_clock::now()).time_since_epoch().count()), &ts_buf);
         return rocksdb_get_with_fixed_ts(db, key, keylen, &ts, vallen, errptr);
     }
 
     char *rocksdb_get_with_uint64_ts(rocksdb_t *db, const char *key, size_t keylen, uint64_t ts, size_t *vallen, char **errptr)
     {
         std::string ts_buf;
-        Slice ts_slice = rocksdb::EncodeU64Ts(ts, &ts_buf);
+        auto ts_slice = rocksdb::EncodeU64Ts(ts, &ts_buf);
         return rocksdb_get_with_fixed_ts(db, key, keylen, &ts_slice, vallen, errptr);
     }
 
     char *rocksdb_get_with_fixed64_ts(rocksdb_t *db, const char *key, size_t keylen, const char *ts, size_t tslen, size_t *vallen, char **errptr)
     {
-        Slice ts_slice = Slice(ts, tslen);
+        auto ts_slice = Slice(ts, tslen);
         return rocksdb_get_with_fixed_ts(db, key, keylen, &ts_slice, vallen, errptr);
+    }
+
+    void rocksdb_sstfilewriter_delete_range_with_ts(rocksdb_sstfilewriter_t *writer, const char *begin_key, size_t begin_keylen, const char *end_key, size_t end_keylen, const char *ts, size_t tslen, char **errptr)
+    {
+        SaveError(errptr, writer->rep->DeleteRange(Slice(begin_key, begin_keylen), Slice(end_key, end_keylen), Slice(ts, tslen)));
     }
 
     rocksdb_sstfilereader_t *rocksdb_sstfilereader_create(rocksdb_options_t *opt)
     {
-        rocksdb_sstfilereader_t *reader = new rocksdb_sstfilereader_t;
+        auto reader = new rocksdb_sstfilereader_t;
         reader->rep = new rocksdb::SstFileReader(opt->rep);
         return reader;
     }
@@ -272,7 +291,7 @@ extern "C"
 
     rocksdb_iterator_t *rocksdb_sstfilereader_iterator(rocksdb_sstfilereader_t *reader, rocksdb_readoptions_t *opt)
     {
-        rocksdb_iterator_t *ite = new rocksdb_iterator_t;
+        auto ite = new rocksdb_iterator_t;
         ite->rep = reader->rep->NewIterator(opt->rep);
         return ite;
     }
